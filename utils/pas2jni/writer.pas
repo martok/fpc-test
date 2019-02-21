@@ -1143,6 +1143,7 @@ procedure TWriter.WriteVar(d: TVarDef; AParent: TDef);
         if (VarType.DefType = dtType) and (TTypeDef(VarType).BasicType in [btByte, btShortInt, btSmallInt]) then
           VarType:=FIntegerType;
         VarOpt:=[voRead];
+        IsUsed:=True;
       end;
       Result:=ad.ElType;
       ad:=TArrayDef(Result);
@@ -1651,11 +1652,14 @@ begin
 
       for i:=0 to u.Count - 1 do begin
         d:=u[i];
-        if (d.DefType = dtType) and (TTypeDef(d).BasicType = btLongInt) then begin
+        if (d.DefType = dtType) and (TTypeDef(d).BasicType = btLongInt) and (Copy(d.Name, 1, 1) <> '$') then begin
           FIntegerType:=d;
           break;
         end;
       end;
+
+      if FIntegerType = nil then
+        raise Exception.Create('LongInt type has not been found in the System unit.');
 
       if LibAutoLoad then begin
         Fjs.WriteLn('static private boolean _JniLibLoaded = false;');
@@ -2041,9 +2045,9 @@ begin
 
       Fjs.WriteLn('private native static long InterfaceCast(long objptr, String objid);');
       Fjs.WriteLn;
-      Fjs.WriteLn('public static class PascalInterface extends PascalObjectEx {');
+      Fjs.WriteLn('public static abstract class PascalInterface extends PascalObjectEx {');
       Fjs.IncI;
-      Fjs.WriteLn('protected void __Init() { }');
+      Fjs.WriteLn('abstract protected void __Init();');
       Fjs.WriteLn('public void __TypeCast(PascalObject obj, String intfId) {');
       Fjs.WriteLn('if (obj != null) {', 1);
       Fjs.WriteLn('if (obj instanceof PascalInterface) {', 2);
@@ -2188,8 +2192,6 @@ begin
   Fps.WriteLn('Result:=JNI_ERR;');
   Fps.WriteLn('if vm^^.GetEnv(vm, @env, JNI_VERSION_1_6) <> JNI_OK then exit;');
   Fps.WriteLn('CurJavaVM:=vm;');
-  Fps.WriteLn('_JavaExceptionClass:=env^^.FindClass(env, ''java/lang/Exception'');');
-  Fps.WriteLn('if _JavaExceptionClass = nil then exit;');
 
   d:=TTypeDef.Create(nil, dtType);
   try
@@ -3003,8 +3005,6 @@ begin
     Fps.WriteLn('end;');
 
     Fps.WriteLn;
-    Fps.WriteLn('var _JavaExceptionClass: jclass;');
-    Fps.WriteLn;
     Fps.WriteLn('procedure _HandleJNIException(env: PJNIEnv);');
     Fps.WriteLn('begin');
     Fps.WriteLn('if env^^.ExceptionCheck(env) <> 0 then exit;', 1);
@@ -3012,7 +3012,7 @@ begin
       Fps.WriteLn(Format('%s.%s;', [p.OnExceptionProc.Parent.Name, p.OnExceptionProc.Name]), 1);
       p.OnExceptionProc.SetNotUsed;
     end;
-    Fps.WriteLn('env^^.ThrowNew(env, _JavaExceptionClass, PAnsiChar(Utf8Encode(Exception(ExceptObject).Message)));', 1);
+    Fps.WriteLn('env^^.ThrowNew(env, env^^.FindClass(env, ''java/lang/Exception''), PAnsiChar(Utf8Encode(Exception(ExceptObject).Message)));', 1);
     Fps.WriteLn('end;');
 
     Fps.WriteLn;

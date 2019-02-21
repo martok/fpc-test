@@ -806,6 +806,7 @@ type
     procedure TestAssert;
     procedure TestAssert_SysUtils;
     procedure TestObjectChecks;
+    procedure TestOverflowChecks_Int;
     procedure TestRangeChecks_AssignInt;
     procedure TestRangeChecks_AssignIntRange;
     procedure TestRangeChecks_AssignEnum;
@@ -2521,8 +2522,8 @@ begin
   Add('  b2: boolean = true;');
   Add('  d2: double = 5.6;');
   Add('  i3: longint = $707;');
-  Add('  i4: nativeint = 4503599627370495;');
-  Add('  i5: nativeint = -4503599627370495-1;');
+  Add('  i4: nativeint = 9007199254740991;');
+  Add('  i5: nativeint = -9007199254740991-1;');
   Add('  i6: nativeint =   $fffffffffffff;');
   Add('  i7: nativeint = -$fffffffffffff-1;');
   Add('  i8: byte = 00;');
@@ -2544,8 +2545,8 @@ begin
     'this.b2 = true;',
     'this.d2 = 5.6;',
     'this.i3 = 0x707;',
-    'this.i4 = 4503599627370495;',
-    'this.i5 = -4503599627370495-1;',
+    'this.i4 = 9007199254740991;',
+    'this.i5 = -9007199254740991-1;',
     'this.i6 = 0xfffffffffffff;',
     'this.i7 =-0xfffffffffffff-1;',
     'this.i8 = 0;',
@@ -6166,9 +6167,9 @@ begin
   '  fn1_0En12 = -1E-12;',
   '  maxdouble = 1.7e+308;',
   '  mindouble = -1.7e+308;',
-  '  MinSafeIntDouble = -$10000000000000;',
-  '  MinSafeIntDouble2 = -$fffffffffffff-1;',
-  '  MaxSafeIntDouble =   $fffffffffffff;',
+  '  MinSafeIntDouble  = -$1fffffffffffff;',
+  '  MinSafeIntDouble2 = -$20000000000000-1;',
+  '  MaxSafeIntDouble =   $1fffffffffffff;',
   '  DZeroResolution = 1E-12;',
   '  Minus1 = -1E-12;',
   '  EPS = 1E-9;',
@@ -6236,9 +6237,9 @@ begin
     'this.fn1_0En12 = -1E-12;',
     'this.maxdouble = 1.7e+308;',
     'this.mindouble = -1.7e+308;',
-    'this.MinSafeIntDouble = -0x10000000000000;',
-    'this.MinSafeIntDouble2 = -0xfffffffffffff - 1;',
-    'this.MaxSafeIntDouble = 0xfffffffffffff;',
+    'this.MinSafeIntDouble = -0x1fffffffffffff;',
+    'this.MinSafeIntDouble2 = -0x20000000000000 - 1;',
+    'this.MaxSafeIntDouble = 0x1fffffffffffff;',
     'this.DZeroResolution = 1E-12;',
     'this.Minus1 = -1E-12;',
     'this.EPS = 1E-9;',
@@ -6279,11 +6280,11 @@ begin
     '$mod.d = -1E-12;',
     '$mod.d = 1.7E308;',
     '$mod.d = -1.7E308;',
-    '$mod.d = -4503599627370496;',
-    '$mod.d = -4503599627370496;',
-    '$mod.d = -4503599627370496;',
-    '$mod.d = -4503599627370496;',
-    '$mod.d = 4503599627370495;',
+    '$mod.d = -9007199254740991;',
+    '$mod.d = -9007199254740991;',
+    '$mod.d = -9.007199254740992E15;',
+    '$mod.d = -9.007199254740992E15;',
+    '$mod.d = 9007199254740991;',
     '$mod.d = 0.0;',
     '']));
 end;
@@ -6309,15 +6310,15 @@ begin
   ConvertProgram;
   CheckSource('TestIntegerRange',
     LinesToStr([
-    'this.MinInt = -4503599627370496;',
-    'this.MaxInt = 4503599627370495;',
-    'this.a = -4503599627370496 + 4503599627370495;',
+    'this.MinInt = -9007199254740991;',
+    'this.MaxInt = 9007199254740991;',
+    'this.a = -9007199254740991 + 9007199254740991;',
     'this.i = 0;',
     '']),
     LinesToStr([
-    '$mod.i = - -4503599627370496;',
-    '$mod.i = -4503599627370496;',
-    '$mod.i = -4503599627370496 + 4503599627370495;',
+    '$mod.i = - -9007199254740991;',
+    '$mod.i = -9007199254740991;',
+    '$mod.i = -9007199254740991 + 9007199254740991;',
     '']));
 end;
 
@@ -28654,6 +28655,55 @@ begin
     '$mod.o.DoIt();',
     '$mod.b = rtl.asExt($mod.o,$mod.TBird, 1);',
     '$mod.bc = rtl.asExt($mod.c, $mod.TBird, 2);',
+    '']));
+end;
+
+procedure TTestModule.TestOverflowChecks_Int;
+begin
+  Scanner.CurrentBoolSwitches:=Scanner.CurrentBoolSwitches+[bsOverflowChecks];
+  StartProgram(false);
+  Add([
+  'procedure DoIt;',
+  'var',
+  '  b: byte;',
+  '  n: nativeint;',
+  '  u: nativeuint;',
+  '  c: currency;',
+  'begin',
+  '  n:=n+n;',
+  '  n:=n-n;',
+  '  n:=n+b;',
+  '  n:=b-n;',
+  '  n:=n*n;',
+  '  n:=n*u;',
+  '  c:=c+b;',
+  '  c:=b+c;',
+  '  c:=c*b;',
+  '  c:=b*c;',
+  'end;',
+  'begin',
+  '']);
+  ConvertProgram;
+  CheckSource('TestOverflowChecks_Int',
+    LinesToStr([ // statements
+    'this.DoIt = function () {',
+    '  var b = 0;',
+    '  var n = 0;',
+    '  var u = 0;',
+    '  var c = 0;',
+    '  n = rtl.oc(n + n);',
+    '  n = rtl.oc(n - n);',
+    '  n = rtl.oc(n + b);',
+    '  n = rtl.oc(b - n);',
+    '  n = rtl.oc(n * n);',
+    '  n = rtl.oc(n * u);',
+    '  c = rtl.oc(c + (b * 10000));',
+    '  c = rtl.oc((b * 10000) + c);',
+    '  c = rtl.oc(c * b);',
+    '  c = rtl.oc(b * c);',
+    '};',
+    '']),
+    LinesToStr([ // $mod.$main
     '']));
 end;
 
